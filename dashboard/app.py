@@ -21,7 +21,6 @@ API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
     page_title="JKN Sentiment",
-    page_icon="🏥",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
