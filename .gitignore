@@ -1,0 +1,43 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# uv
+.venv/
+venv/
+
+# HuggingFace model cache
+.cache/
+*.safetensors
+
+# Output files
+output_jkn/
+*.csv
+*.xlsx
+*.json
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
