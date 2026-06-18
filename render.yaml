@@ -1,0 +1,44 @@
+# ──────────────────────────────────────────────────────────
+#  render.yaml — Render Blueprint
+#  Deploy 2 services sekaligus (FastAPI backend + Streamlit)
+#  Cara pakai: render.com → New → Blueprint → connect repo
+# ──────────────────────────────────────────────────────────
+
+services:
+
+  # ── Service 1: FastAPI Backend ──────────────────────────
+  - type: web
+    name: jkn-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false          # ← isi manual di dashboard Render
+      - key: SUPABASE_KEY
+        sync: false
+      - key: APP_ID
+        value: app.bpjs.mobile
+      - key: SENTIMENT_MODEL
+        value: taufiqdp/indonesian-sentiment
+      - key: SENTIMENT_BATCH_SIZE
+        value: "32"
+
+  # ── Service 2: Streamlit Dashboard ──────────────────────
+  - type: web
+    name: jkn-dashboard
+    runtime: python
+    plan: free
+    buildCommand: |
+      pip install --upgrade pip
+      pip install streamlit plotly pandas openpyxl requests python-dotenv
+    startCommand: streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0
+    healthCheckPath: /healthz
+    envVars:
+      - key: API_BASE
+        value: https://jkn-api.onrender.com   # ← ganti kalau nama service berbeda
+      - key: STREAMLIT_SERVER_HEADLESS
+        value: "true"
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"
