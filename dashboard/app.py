@@ -21,6 +21,7 @@ API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
     page_title="JKN Sentiment",
+    page_icon="🏥",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -293,6 +294,7 @@ div[data-testid="stAlert"] {
 # ── Helpers ───────────────────────────────────────────────
 
 def api_get(path: str, params: dict | None = None) -> dict | list | None:
+    """Raw API call — gunakan versi cached di bawah untuk dashboard."""
     try:
         r = requests.get(f"{API_BASE}{path}", params=params, timeout=10)
         r.raise_for_status()
@@ -310,6 +312,40 @@ def api_post(path: str, body: dict) -> dict | None:
     except Exception as e:
         st.error(f"API error POST ({path}): {e}")
         return None
+
+
+# ── CACHED API CALLS ──────────────────────────────────────
+# Semua fungsi API call di-cache agar tidak hit server tiap widget interaction.
+# TTL (time-to-live) dalam detik — sesuaikan dengan frekuensi update data lo.
+
+@st.cache_data(ttl=300, show_spinner=False)   # cache 5 menit
+def fetch_stats() -> dict | None:
+    """Stats ringkasan — di-cache 5 menit."""
+    return api_get("/reviews/stats")
+
+
+@st.cache_data(ttl=600, show_spinner=False)   # cache 10 menit
+def fetch_trend() -> list | None:
+    """Tren bulanan — jarang berubah, cache 10 menit."""
+    return api_get("/reviews/monthly-trend")
+
+
+@st.cache_data(ttl=120, show_spinner=False)   # cache 2 menit
+def fetch_reviews(sentiment: str | None = None, score: int | None = None,
+                  page: int = 1, per_page: int = 50) -> dict | None:
+    """List ulasan dengan filter — cache 2 menit."""
+    params: dict = {"page": page, "per_page": per_page}
+    if sentiment:
+        params["sentiment"] = sentiment
+    if score:
+        params["score"] = score
+    return api_get("/reviews", params=params)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_scrape_status() -> dict | None:
+    """Status DB — cache 5 menit."""
+    return api_get("/scrape/status")
 
 
 def sentiment_badge(s: str | None) -> str:
@@ -342,76 +378,101 @@ tab_dash, tab_scrape, tab_data = st.tabs(["DASHBOARD", "SCRAPER", "DATA & EXPORT
 
 # ════════════════════════════════════════════════════════════
 # TAB 1 — DASHBOARD
+# Semua API call pakai cached functions agar tidak hit server
+# tiap kali user klik widget. Fragment = hanya bagian tertentu
+# yang rerender saat ada perubahan, bukan seluruh halaman.
 # ════════════════════════════════════════════════════════════
-with tab_dash:
-    stats = api_get("/reviews/stats")
-    trend = api_get("/reviews/monthly-trend")
 
+# ── Fragment: stat cards — rerender sendiri tiap 5 menit ──
+@st.fragment(run_every=300)
+def _stat_cards():
+    stats = fetch_stats()  # cached 5 menit
+    if not stats:
+        st.warning("Belum ada data. Jalankan scraping terlebih dahulu.")
+        return
+    c1, c2, c3, c4, c5 = st.columns(5)
+    cards = [
+        (c1, "Total Ulasan",  stats["total"],               "di database",                "nb-stat-accent-tot"),
+        (c2, "Positif",       stats["positif"],             f"{stats['pct_positif']}%",   "nb-stat-accent-pos"),
+        (c3, "Negatif",       stats["negatif"],             f"{stats['pct_negatif']}%",   "nb-stat-accent-neg"),
+        (c4, "Netral",        stats["netral"],              f"{stats['pct_netral']}%",    "nb-stat-accent-neu"),
+        (c5, "Avg Rating",    f"{stats['avg_rating']:.1f}", "dari skala 5.0",             "nb-stat-accent-rat"),
+    ]
+    for col, label, val, sub, cls in cards:
+        with col:
+            st.markdown(f"""
+            <div class="nb-stat {cls}">
+                <div class="nb-stat-label">{label}</div>
+                <div class="nb-stat-value">{val}</div>
+                <div class="nb-stat-sub">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ── Fragment: donut chart — independen dari filter tabel ──
+@st.fragment
+def _chart_donut():
+    stats = fetch_stats()  # dari cache, tidak hit API lagi
+    st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Proporsi Sentimen</div>', unsafe_allow_html=True)
     if stats:
-        # ── Stat cards ──
-        c1, c2, c3, c4, c5 = st.columns(5)
-        cards = [
-            (c1, "Total Ulasan",    stats["total"],    f"di database", "nb-stat-accent-tot", ""),
-            (c2, "Positif",         stats["positif"],  f"{stats['pct_positif']}% dari total", "nb-stat-accent-pos", ""),
-            (c3, "Negatif",         stats["negatif"],  f"{stats['pct_negatif']}% dari total", "nb-stat-accent-neg", ""),
-            (c4, "Netral",          stats["netral"],   f"{stats['pct_netral']}% dari total",  "nb-stat-accent-neu", ""),
-            (c5, "Avg Rating",      f"{stats['avg_rating']:.1f}",  "dari skala 5.0",          "nb-stat-accent-rat", ""),
-        ]
-        for col, label, val, sub, cls, _ in cards:
-            with col:
-                st.markdown(f"""
-                <div class="nb-stat {cls}">
-                    <div class="nb-stat-label">{label}</div>
-                    <div class="nb-stat-value">{val}</div>
-                    <div class="nb-stat-sub">{sub}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        st.plotly_chart(
+            donut_chart(stats["positif"], stats["netral"], stats["negatif"]),
+            use_container_width=True,
+            config={"displayModeBar": False, "staticPlot": False},
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("")  # spacer
+# ── Fragment: trend line — cache 10 menit, rerender sendiri ──
+@st.fragment
+def _chart_trend():
+    trend = fetch_trend()  # cached 10 menit
+    st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Tren Sentimen Bulanan</div>', unsafe_allow_html=True)
+    if trend:
+        st.plotly_chart(
+            trend_line(trend),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    else:
+        st.caption("Belum ada data tren. Jalankan scraping terlebih dahulu.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Charts row 1 ──
-    st.markdown('<div class="nb-section">Distribusi Sentimen</div>', unsafe_allow_html=True)
-    col_a, col_b = st.columns([1, 1.8])
-
-    with col_a:
-        st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Proporsi Sentimen</div>', unsafe_allow_html=True)
-        if stats:
-            st.plotly_chart(
-                donut_chart(stats["positif"], stats["netral"], stats["negatif"]),
-                use_container_width=True, config={"displayModeBar": False},
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col_b:
-        st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Tren Sentimen Bulanan</div>', unsafe_allow_html=True)
-        if trend:
-            st.plotly_chart(
-                trend_line(trend),
-                use_container_width=True, config={"displayModeBar": False},
-            )
-        elif not trend:
-            st.caption("Belum ada data tren. Jalankan scraping terlebih dahulu.")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Charts row 2 ──
+# ── Fragment: rating charts — fetch sample data sekali ──
+@st.fragment
+def _chart_ratings():
+    reviews_sample = fetch_reviews(per_page=200)  # cached 2 menit
+    df_sample = pd.DataFrame(reviews_sample["data"] if reviews_sample else [])
     st.markdown('<div class="nb-section">Analisis Rating</div>', unsafe_allow_html=True)
     col_c, col_d = st.columns(2)
-
-    # Ambil sampel data untuk charts
-    reviews_sample = api_get("/reviews", params={"per_page": 200})
-    df_sample = pd.DataFrame(reviews_sample["data"] if reviews_sample else [])
-
     with col_c:
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Distribusi Rating Bintang</div>', unsafe_allow_html=True)
         if not df_sample.empty and "score" in df_sample.columns:
             st.plotly_chart(bar_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
         st.markdown("</div>", unsafe_allow_html=True)
-
     with col_d:
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Rata-rata Rating per Sentimen</div>', unsafe_allow_html=True)
         if not df_sample.empty:
             st.plotly_chart(horizontal_bar_avg_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+with tab_dash:
+    # Panggil semua fragment — masing-masing rerender independen
+    _stat_cards()
+
+    # Charts row 1
+    st.markdown('<div class="nb-section">Distribusi Sentimen</div>', unsafe_allow_html=True)
+    col_a, col_b = st.columns([1, 1.8])
+    with col_a:
+        _chart_donut()
+    with col_b:
+        _chart_trend()
+
+    # Charts row 2 (bundled dalam satu fragment)
+    _chart_ratings()
+
+    # Buat df_sample tersedia untuk bagian reviews di bawah
+    _sample_raw = fetch_reviews(per_page=200)
+    df_sample = pd.DataFrame(_sample_raw["data"] if _sample_raw else [])
 
     # ── Keyword tags ──
     st.markdown('<div class="nb-section">Topik Ulasan</div>', unsafe_allow_html=True)
@@ -442,20 +503,27 @@ with tab_dash:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Sample reviews ──
+    # ── Sample reviews — gunakan st.form agar tidak rerun tiap klik ──
     st.markdown('<div class="nb-section">Ulasan Terpilih</div>', unsafe_allow_html=True)
 
-    filter_sent = st.selectbox(
-        "Filter sentimen",
-        options=["semua", "positif", "negatif", "netral"],
-        label_visibility="collapsed",
-    )
+    # st.form: rerun hanya saat klik "Tampilkan", bukan tiap selectbox berubah
+    with st.form("review_filter_form"):
+        filter_sent = st.selectbox(
+            "Filter sentimen",
+            options=["semua", "positif", "negatif", "netral"],
+            label_visibility="collapsed",
+        )
+        show_btn = st.form_submit_button("🔍 Tampilkan Ulasan", use_container_width=True)
 
-    q_params: dict = {"per_page": 10}
-    if filter_sent != "semua":
-        q_params["sentiment"] = filter_sent
+    # Simpan state filter ke session_state agar tidak reset saat tab switch
+    if show_btn:
+        st.session_state["dash_filter_sent"] = filter_sent
 
-    rev_data = api_get("/reviews", params=q_params)
+    active_sent = st.session_state.get("dash_filter_sent", "semua")
+    rev_data = fetch_reviews(
+        sentiment=None if active_sent == "semua" else active_sent,
+        per_page=10,
+    )  # cached 2 menit
 
     if rev_data and rev_data.get("data"):
         for r in rev_data["data"]:
@@ -492,7 +560,7 @@ with tab_scrape:
 
     with col_f2:
         st.markdown("<br>", unsafe_allow_html=True)
-        status = api_get("/scrape/status")
+        status = fetch_scrape_status()  # cached 5 menit
         if status:
             st.markdown(f"""
             <div class="nb-stat nb-stat-accent-tot" style="margin-bottom:1rem">
@@ -515,6 +583,11 @@ with tab_scrape:
                 "run_sentiment":  run_sentiment,
             })
         if result and result.get("status") == "success":
+            # Clear semua cache setelah scraping baru agar data segar
+            fetch_stats.clear()
+            fetch_trend.clear()
+            fetch_reviews.clear()
+            fetch_scrape_status.clear()
             st.success(result["message"])
             dist = result.get("sentiment_dist", {})
             c1, c2, c3 = st.columns(3)
@@ -542,25 +615,37 @@ with tab_scrape:
 
 # ════════════════════════════════════════════════════════════
 # TAB 3 — DATA & EXPORT
+# Gunakan st.form untuk tahan rerun sampai user klik Apply.
 # ════════════════════════════════════════════════════════════
 with tab_data:
     st.markdown('<div class="nb-section">Tabel Data Ulasan</div>', unsafe_allow_html=True)
 
-    col_e1, col_e2, col_e3 = st.columns(3)
-    with col_e1:
-        flt_sent = st.selectbox("Sentimen", ["semua", "positif", "negatif", "netral"], key="dt_sent")
-    with col_e2:
-        flt_score = st.selectbox("Rating", ["semua", "1", "2", "3", "4", "5"], key="dt_score")
-    with col_e3:
-        flt_page = st.number_input("Halaman", min_value=1, value=1, key="dt_page")
+    # st.form: rerun hanya saat klik "Tampilkan", bukan tiap selectbox berubah
+    with st.form("data_filter_form"):
+        col_e1, col_e2, col_e3 = st.columns(3)
+        with col_e1:
+            flt_sent = st.selectbox("Sentimen", ["semua", "positif", "negatif", "netral"], key="dt_sent")
+        with col_e2:
+            flt_score = st.selectbox("Rating", ["semua", "1", "2", "3", "4", "5"], key="dt_score")
+        with col_e3:
+            flt_page = st.number_input("Halaman", min_value=1, value=1, key="dt_page")
+        apply_btn = st.form_submit_button("🔍 Tampilkan Data", use_container_width=True)
 
-    dt_params: dict = {"page": flt_page, "per_page": 50}
-    if flt_sent != "semua":
-        dt_params["sentiment"] = flt_sent
-    if flt_score != "semua":
-        dt_params["score"] = int(flt_score)
+    if apply_btn:
+        st.session_state["dt_sent_val"] = flt_sent
+        st.session_state["dt_score_val"] = flt_score
+        st.session_state["dt_page_val"] = flt_page
 
-    dt_data = api_get("/reviews", params=dt_params)
+    _s = st.session_state.get("dt_sent_val", "semua")
+    _sc = st.session_state.get("dt_score_val", "semua")
+    _pg = st.session_state.get("dt_page_val", 1)
+
+    dt_data = fetch_reviews(
+        sentiment=None if _s == "semua" else _s,
+        score=None if _sc == "semua" else int(_sc),
+        page=_pg,
+        per_page=50,
+    )  # cached 2 menit
 
     if dt_data and dt_data.get("data"):
         df_show = pd.DataFrame(dt_data["data"])
@@ -580,10 +665,13 @@ with tab_data:
     exp_sent = st.selectbox("Filter sentimen untuk export", ["semua", "positif", "negatif", "netral"], key="exp_sent")
     exp_sent_val = None if exp_sent == "semua" else exp_sent
 
-    # Fetch full data for export
+    # Fetch full data for export — gunakan cache agar tidak hit API berkali-kali
     if st.button("📥 GENERATE FILE EXPORT", use_container_width=True):
         with st.spinner("Mengambil semua data..."):
-            full_data = api_get("/reviews", params={"per_page": 5000, **({"sentiment": exp_sent_val} if exp_sent_val else {})})
+            full_data = fetch_reviews(
+                sentiment=exp_sent_val,
+                per_page=5000,
+            )
 
         if full_data and full_data.get("data"):
             df_exp = pd.DataFrame(full_data["data"])
