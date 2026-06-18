@@ -4,6 +4,8 @@ Neo-brutalism + minimalist header style.
 """
 from __future__ import annotations
 
+import os
+import requests
 import pandas as pd
 import streamlit as st
 from supabase import create_client
@@ -11,9 +13,22 @@ from supabase import create_client
 from components.charts import donut_chart, bar_rating, trend_line, horizontal_bar_avg_rating
 from components.export import to_csv_bytes, to_xlsx_bytes
 
+IS_HOSTED = os.getenv("STREAMLIT_SHARING") == "true"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+
 @st.cache_resource
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+def call_fastapi(endpoint: str, params: dict | None = None) -> dict | list | None:
+    """Helper untuk call FastAPI lokal."""
+    try:
+        r = requests.get(f"{API_BASE}{endpoint}", params=params, timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.warning(f"FastAPI tidak tersedia: {e}. Menggunakan Supabase langsung.")
+        return None
 
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
@@ -88,6 +103,10 @@ div[data-testid="stSelectbox"] > div > div { background: #000000 !important; bor
 # ── DATA FETCHERS ─────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_stats() -> dict | None:
+    if not IS_HOSTED:
+        result = call_fastapi("/reviews/stats")
+        if result: return result
+
     try:
         sb = get_supabase()
         res_all = sb.table("reviews").select("*", count="exact").execute()
@@ -117,6 +136,10 @@ def fetch_stats() -> dict | None:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_trend() -> list | None:
+    if not IS_HOSTED:
+        result = call_fastapi("/reviews/monthly-trend")
+        if result: return result
+
     try:
         sb = get_supabase()
         res = sb.table("reviews").select("review_date, sentiment").execute()
@@ -125,9 +148,9 @@ def fetch_trend() -> list | None:
 
         df['review_date'] = pd.to_datetime(df['review_date'], errors='coerce')
         df = df.dropna(subset=['review_date'])
-        df['month'] = df['review_date'].dt.strftime('%Y-%m')
+        df['bulan'] = df['review_date'].dt.strftime('%Y-%m')
 
-        trend_df = df.groupby(['month', 'sentiment']).size().unstack(fill_value=0).reset_index()
+        trend_df = df.groupby(['bulan', 'sentiment']).size().unstack(fill_value=0).reset_index()
         return trend_df.to_dict(orient="records")
     except Exception as e:
         st.error(f"Error loading trend: {e}")
@@ -136,6 +159,13 @@ def fetch_trend() -> list | None:
 @st.cache_data(ttl=120, show_spinner=False)
 def fetch_reviews(sentiment: str | None = None, score: int | None = None,
                   page: int = 1, per_page: int = 50) -> dict | None:
+    if not IS_HOSTED:
+        params = {"page": page, "per_page": per_page}
+        if sentiment: params["sentiment"] = sentiment
+        if score: params["score"] = score
+        result = call_fastapi("/reviews", params=params)
+        if result: return result
+
     try:
         sb = get_supabase()
         query = sb.table("reviews").select("*", count="exact")
@@ -155,6 +185,10 @@ def fetch_reviews(sentiment: str | None = None, score: int | None = None,
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_scrape_status() -> dict | None:
+    if not IS_HOSTED:
+        result = call_fastapi("/scrape/status")
+        if result: return result
+
     try:
         sb = get_supabase()
         res = sb.table("reviews").select("*", count="exact").execute()
@@ -172,13 +206,17 @@ def star_str(score: int | None) -> str:
     return "★" * int(score) + "☆" * (5 - int(score))
 
 # ── HEADER ────────────────────────────────────────────────
-st.markdown("""
+env_badge = "☁️ STREAMLIT CLOUD" if IS_HOSTED else "💻 LOCAL"
+st.markdown(f"""
 <div class="nb-header">
     <div>
         <div class="nb-header-title">🏥 JKN Sentiment</div>
         <div class="nb-header-sub">Mobile JKN — BPJS Kesehatan · Analisis Ulasan Google Play</div>
     </div>
-    <div class="nb-header-badge">IndoBERT</div>
+    <div style="display: flex; gap: 0.5rem;">
+        <div class="nb-header-badge">{env_badge}</div>
+        <div class="nb-header-badge">IndoBERT</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
