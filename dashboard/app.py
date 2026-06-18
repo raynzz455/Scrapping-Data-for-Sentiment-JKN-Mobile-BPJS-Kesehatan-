@@ -13,20 +13,42 @@ from components.export import to_csv_bytes, to_xlsx_bytes
 
 load_dotenv()
 
-# ── DETEKSI OTOMATIS JARINGAN (LOKAL vs CLOUD HOSTING) ──────────────────
-# Streamlit Cloud secara default berjalan dalam mode HEADLESS.
-# Jika dijalankan di lokal, biasanya variabel ini tidak ada atau bernilai salah.
+# ── KONFIGURASI ───────────────────────────────────────────
+# Jika berjalan di Cloud, IS_HOSTED akan True.
 IS_HOSTED = os.getenv("STREAMLIT_SERVER_HEADLESS") == "true"
-
-# Mengambil Kunci dari Secrets (Mendukung Lokal secrets.toml & Cloud Secrets)
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
 API_BASE = st.secrets.get("API_BASE", "http://localhost:8000")
 
-# Inisialisasi Supabase Client jika di-hosting (Bypass FastAPI)
-supabase_client: Client | None = None
-if IS_HOSTED and SUPABASE_URL and SUPABASE_KEY:
-    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_supabase():
+    """Mengambil client Supabase secara lazily menggunakan st.secrets."""
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+# ── LOGIKA DATA (HYBRID) ───────────────────────────────────
+def fetch_stats():
+    if IS_HOSTED:
+        # Panggilan Direct Supabase (Bypass FastAPI)
+        client = get_supabase()
+        res = client.table("reviews").select("sentiment").execute()
+        df = pd.DataFrame(res.data)
+        if df.empty: return None
+        
+        counts = df['sentiment'].value_counts()
+        total = len(df)
+        return {
+            "total": total,
+            "positif": int(counts.get("positif", 0)),
+            "negatif": int(counts.get("negatif", 0)),
+            "netral": int(counts.get("netral", 0)),
+            "pct_positif": round((counts.get("positif", 0)/total)*100, 1),
+            "pct_negatif": round((counts.get("negatif", 0)/total)*100, 1),
+            "pct_netral": round((counts.get("netral", 0)/total)*100, 1),
+            "avg_rating": 0.0 # Tambahkan logic jika kolom rating ada
+        }
+    else:
+        # Panggilan API Lokal
+        try:
+            r = requests.get(f"{API_BASE}/reviews/stats", timeout=5)
+            return r.json()
+        except: return None
 
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
