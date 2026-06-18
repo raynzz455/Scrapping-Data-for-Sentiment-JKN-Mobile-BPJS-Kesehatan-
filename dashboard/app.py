@@ -330,8 +330,9 @@ def fetch_supabase(path: str, params: dict | None = None) -> dict | list | None:
 
             pos, neg, neu = (res_pos.count or 0), (res_neg.count or 0), (res_neu.count or 0)
 
-            res_rating = sb.table("reviews").select("score").execute()
+            res_rating = sb.table("reviews").select("score").order("review_date", desc=True).limit(1000).execute()
             df_r = pd.DataFrame(res_rating.data)
+            df_r = df_r[df_r["score"] > 0]
             avg_rating = df_r["score"].mean() if not df_r.empty else 0.0
 
             return {
