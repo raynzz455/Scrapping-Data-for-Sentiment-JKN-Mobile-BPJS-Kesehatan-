@@ -1,7 +1,14 @@
 # ──────────────────────────────────────────────────────────
 #  render.yaml — Render Blueprint
 #  Deploy 2 services sekaligus (FastAPI backend + Streamlit)
-#  Cara pakai: render.com → New → Blueprint → connect repo
+#
+#  Build command bawaan Render untuk project uv:
+#    uv sync --frozen && uv cache prune --ci
+#  Start command harus pakai: uv run <command>
+#
+#  Cara pakai:
+#    render.com → New → Blueprint → connect repo → Deploy
+#    Lalu isi SUPABASE_URL + SUPABASE_KEY di env vars
 # ──────────────────────────────────────────────────────────
 
 services:
@@ -9,13 +16,16 @@ services:
   # ── Service 1: FastAPI Backend ──────────────────────────
   - type: web
     name: jkn-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    runtime: python
     plan: free
+    # Build command: Render auto-detect uv dari pyproject.toml + uv.lock
+    # Default bawaan Render = "uv sync --frozen && uv cache prune --ci"
+    buildCommand: uv sync --frozen && uv cache prune --ci
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
     healthCheckPath: /health
     envVars:
       - key: SUPABASE_URL
-        sync: false          # ← isi manual di dashboard Render
+        sync: false
       - key: SUPABASE_KEY
         sync: false
       - key: APP_ID
@@ -24,21 +34,22 @@ services:
         value: taufiqdp/indonesian-sentiment
       - key: SENTIMENT_BATCH_SIZE
         value: "32"
+      - key: DEBUG
+        value: "false"
 
   # ── Service 2: Streamlit Dashboard ──────────────────────
   - type: web
     name: jkn-dashboard
     runtime: python
     plan: free
-    buildCommand: |
-      pip install --upgrade pip
-      pip install streamlit plotly pandas openpyxl requests python-dotenv
-    startCommand: streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0
-    healthCheckPath: /healthz
+    buildCommand: uv sync --frozen && uv cache prune --ci
+    startCommand: uv run streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
     envVars:
       - key: API_BASE
-        value: https://jkn-api.onrender.com   # ← ganti kalau nama service berbeda
+        value: https://jkn-api.onrender.com
       - key: STREAMLIT_SERVER_HEADLESS
         value: "true"
       - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"
+      - key: STREAMLIT_SERVER_ENABLE_CORS
         value: "false"
