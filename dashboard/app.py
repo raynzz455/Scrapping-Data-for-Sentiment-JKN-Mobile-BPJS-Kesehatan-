@@ -1,6 +1,6 @@
 """
-JKN Sentiment Dashboard — Pure Supabase Version
-Neo-brutalism + minimalist header style.
+JKN Sentiment Dashboard
+Logic: Local → FastAPI | Cloud → Supabase
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from supabase import create_client
 from components.charts import donut_chart, bar_rating, trend_line, horizontal_bar_avg_rating
 from components.export import to_csv_bytes, to_xlsx_bytes
 
+# ── CONFIG ────────────────────────────────────────────────
 IS_HOSTED = os.getenv("STREAMLIT_SHARING") == "true"
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
@@ -20,8 +21,8 @@ API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-def call_fastapi(endpoint: str, params: dict | None = None) -> dict | list | None:
-    """Helper untuk call FastAPI lokal."""
+def call_api(endpoint: str, params: dict | None = None) -> dict | list | None:
+    """Call FastAPI backend."""
     try:
         r = requests.get(f"{API_BASE}{endpoint}", params=params, timeout=5)
         r.raise_for_status()
@@ -49,15 +50,14 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 
 [data-testid="stHeader"] { display: none !important; }
-[data-testid="stSidebar"] { background: #111111 !important; border-right: 2px solid #FFFFFF; }
 [data-testid="stMainBlockContainer"] { padding: 0 2rem 2rem !important; }
 
 .nb-header { border-bottom: 3px solid #FFFFFF; padding: 1.2rem 0 1rem; margin-bottom: 2rem; display: flex; align-items: baseline; gap: 1rem; }
 .nb-header-title { font-family: 'Space Mono', monospace; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em; color: #FFFFFF; text-transform: uppercase; margin: 0; }
 .nb-header-sub { font-size: 0.75rem; color: #666666; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; }
-.nb-header-badge { margin-left: auto; background: #00E5A0; color: #000000; font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700; padding: 3px 10px; border: 2px solid #000000; text-transform: uppercase; letter-spacing: 0.06em; }
+.nb-header-badge { margin-left: auto; background: #00E5A0; color: #000000; font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700; padding: 3px 10px; border: 2px solid #000000; text-transform: uppercase; }
 
-.nb-stat { background: #111111; border: 2px solid #FFFFFF; padding: 1.2rem 1.4rem; position: relative; box-shadow: 4px 4px 0 #FFFFFF; transition: box-shadow 0.12s ease, transform 0.12s ease; }
+.nb-stat { background: #111111; border: 2px solid #FFFFFF; padding: 1.2rem 1.4rem; box-shadow: 4px 4px 0 #FFFFFF; transition: box-shadow 0.12s ease, transform 0.12s ease; }
 .nb-stat:hover { box-shadow: 6px 6px 0 #FFFFFF; transform: translate(-2px, -2px); }
 .nb-stat-label { font-size: 0.65rem; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #666666; margin-bottom: 0.4rem; }
 .nb-stat-value { font-family: 'Space Mono', monospace; font-size: 2.4rem; font-weight: 700; line-height: 1; color: #FFFFFF; }
@@ -89,13 +89,6 @@ html, body, [data-testid="stAppViewContainer"] {
 .nb-tag { font-family: 'Space Mono', monospace; font-size: 0.65rem; padding: 4px 10px; border: 1.5px solid; text-transform: uppercase; letter-spacing: 0.05em; cursor: default; }
 .nb-tag-pos { color: #00E5A0; border-color: #00E5A0; background: rgba(0,229,160,0.06); }
 .nb-tag-neg { color: #FF3B5C; border-color: #FF3B5C; background: rgba(255,59,92,0.06); }
-
-div[data-testid="stNumberInput"] label, div[data-testid="stTextInput"] label { font-family: 'Space Mono', monospace !important; font-size: 0.7rem !important; text-transform: uppercase !important; }
-div[data-testid="stNumberInput"] input, div[data-testid="stTextInput"] input { background: #000000 !important; border: 2px solid #FFFFFF !important; color: #FFFFFF !important; border-radius: 0 !important; }
-div[data-testid="stButton"] button { background: #FFFFFF !important; color: #000000 !important; border: 2px solid #FFFFFF !important; font-family: 'Space Mono', monospace !important; font-weight: 700 !important; text-transform: uppercase !important; box-shadow: 4px 4px 0 #444444 !important; }
-div[data-testid="stSelectbox"] > div > div { background: #000000 !important; border: 2px solid #FFFFFF !important; color: #FFFFFF !important; }
-.stPlotlyChart { border: 2px solid #222222 !important; }
-[data-testid="metric-container"] { background: #111111 !important; border: 2px solid #FFFFFF !important; box-shadow: 4px 4px 0 #FFFFFF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,8 +96,7 @@ div[data-testid="stSelectbox"] > div > div { background: #000000 !important; bor
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_stats() -> dict | None:
     if not IS_HOSTED:
-        result = call_fastapi("/reviews/stats")
-        if result: return result
+        return call_api("/reviews/stats")
 
     try:
         sb = get_supabase()
@@ -130,14 +122,13 @@ def fetch_stats() -> dict | None:
             "avg_rating": round(avg_rating, 2)
         }
     except Exception as e:
-        st.error(f"Error loading stats: {e}")
+        st.error(f"Error: {e}")
         return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_trend() -> list | None:
     if not IS_HOSTED:
-        result = call_fastapi("/reviews/monthly-trend")
-        if result: return result
+        return call_api("/reviews/monthly-trend")
 
     try:
         sb = get_supabase()
@@ -152,7 +143,7 @@ def fetch_trend() -> list | None:
         trend_df = df.groupby(['bulan', 'sentiment']).size().unstack(fill_value=0).reset_index()
         return trend_df.to_dict(orient="records")
     except Exception as e:
-        st.error(f"Error loading trend: {e}")
+        st.error(f"Error: {e}")
         return None
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -162,16 +153,13 @@ def fetch_reviews(sentiment: str | None = None, score: int | None = None,
         params = {"page": page, "per_page": per_page}
         if sentiment: params["sentiment"] = sentiment
         if score: params["score"] = score
-        result = call_fastapi("/reviews", params=params)
-        if result: return result
+        return call_api("/reviews", params=params)
 
     try:
         sb = get_supabase()
         query = sb.table("reviews").select("*", count="exact")
-        if sentiment:
-            query = query.eq("sentiment", sentiment)
-        if score:
-            query = query.eq("score", score)
+        if sentiment: query = query.eq("sentiment", sentiment)
+        if score: query = query.eq("score", score)
 
         start = (page - 1) * per_page
         end = start + per_page - 1
@@ -179,14 +167,13 @@ def fetch_reviews(sentiment: str | None = None, score: int | None = None,
 
         return {"data": res.data, "count": res.count}
     except Exception as e:
-        st.error(f"Error loading reviews: {e}")
+        st.error(f"Error: {e}")
         return None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_scrape_status() -> dict | None:
     if not IS_HOSTED:
-        result = call_fastapi("/scrape/status")
-        if result: return result
+        return call_api("/scrape/status")
 
     try:
         sb = get_supabase()
@@ -219,7 +206,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_dash, tab_data = st.tabs(["DASHBOARD", "DATA & EXPORT"])
+tab_dash, tab_scrape, tab_data = st.tabs(["DASHBOARD", "SCRAPER", "DATA & EXPORT"])
 
 # ════════════════════════════════════════════════════════════
 # TAB 1 — DASHBOARD
@@ -229,7 +216,7 @@ with tab_dash:
     def _stat_cards():
         stats = fetch_stats()
         if not stats:
-            st.warning("Belum ada data di database.")
+            st.warning("Belum ada data.")
             return
         c1, c2, c3, c4, c5 = st.columns(5)
         cards = [
@@ -306,7 +293,7 @@ with tab_dash:
     st.markdown('<div class="nb-section">Ulasan Terpilih</div>', unsafe_allow_html=True)
     with st.form("review_filter_form"):
         filter_sent = st.selectbox("Filter sentimen", options=["semua", "positif", "negatif", "netral"], label_visibility="collapsed")
-        st.form_submit_button("🔍 Tampilkan Ulasan", width="100%")
+        st.form_submit_button("🔍 Tampilkan Ulasan", use_container_width=True)
 
     active_sent = filter_sent if filter_sent != "semua" else None
     rev_data = fetch_reviews(sentiment=active_sent, per_page=10)
@@ -326,7 +313,51 @@ with tab_dash:
             """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
-# TAB 2 — DATA & EXPORT
+# TAB 2 — SCRAPER
+# ════════════════════════════════════════════════════════════
+with tab_scrape:
+    st.markdown('<div class="nb-section">Konfigurasi Scraping</div>', unsafe_allow_html=True)
+
+    if IS_HOSTED:
+        st.warning("⚠️ Scraping hanya bisa dilakukan di local karena FastAPI tidak bisa di-hosting di Streamlit Cloud.")
+    else:
+        col_f1, col_f2 = st.columns([2, 1])
+        with col_f1:
+            app_id = st.text_input("App ID Google Play", value="app.bpjs.mobile")
+            count = st.number_input("Jumlah ulasan", min_value=50, max_value=5000, value=500, step=50)
+            run_sentiment = st.checkbox("Jalankan analisis sentimen IndoBERT", value=True)
+
+        with col_f2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            status = fetch_scrape_status()
+            if status:
+                st.markdown(f"""
+                <div class="nb-stat nb-stat-accent-tot">
+                    <div class="nb-stat-label">Data di DB</div>
+                    <div class="nb-stat-value" style="font-size:1.6rem">{status.get('total_in_db', 0)}</div>
+                    <div class="nb-stat-sub">ulasan tersimpan</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        run_btn = st.button("▶ JALANKAN SCRAPING", use_container_width=True)
+        if run_btn:
+            with st.spinner("Scraping berjalan..."):
+                try:
+                    r = requests.post(f"{API_BASE}/scrape", json={
+                        "app_id": app_id, "count": count, "lang": "id", "country": "id", "run_sentiment": run_sentiment
+                    }, timeout=300)
+                    result = r.json()
+                    if result.get("status") == "success":
+                        fetch_stats.clear()
+                        fetch_trend.clear()
+                        fetch_reviews.clear()
+                        fetch_scrape_status.clear()
+                        st.success(result["message"])
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+# ════════════════════════════════════════════════════════════
+# TAB 3 — DATA & EXPORT
 # ════════════════════════════════════════════════════════════
 with tab_data:
     st.markdown('<div class="nb-section">Tabel Data Ulasan</div>', unsafe_allow_html=True)
@@ -336,7 +367,7 @@ with tab_data:
         with col_e1: flt_sent = st.selectbox("Sentimen", ["semua", "positif", "negatif", "netral"], key="dt_sent")
         with col_e2: flt_score = st.selectbox("Rating", ["semua", "1", "2", "3", "4", "5"], key="dt_score")
         with col_e3: flt_page = st.number_input("Halaman", min_value=1, value=1, key="dt_page")
-        st.form_submit_button("🔍 Tampilkan Data", width="100%")
+        st.form_submit_button("🔍 Tampilkan Data", use_container_width=True)
 
     _s = flt_sent if flt_sent != "semua" else None
     _sc = int(flt_score) if flt_score != "semua" else None
@@ -345,14 +376,14 @@ with tab_data:
     if dt_data and dt_data.get("data"):
         df_show = pd.DataFrame(dt_data["data"])
         display_cols = [c for c in ["user_name", "content", "score", "sentiment", "review_date", "thumbs_up", "app_version"] if c in df_show.columns]
-        st.dataframe(df_show[display_cols], width="100%", height=400)
+        st.dataframe(df_show[display_cols], use_container_width=True, height=400)
     else:
-        st.info("Belum ada data ulasan.")
+        st.info("Belum ada data.")
 
     st.markdown('<div class="nb-section">Export Data</div>', unsafe_allow_html=True)
     exp_sent = st.selectbox("Filter sentimen untuk export", ["semua", "positif", "negatif", "netral"], key="exp_sent")
 
-    if st.button("📥 GENERATE FILE EXPORT", width="100%"):
+    if st.button("📥 GENERATE FILE EXPORT", use_container_width=True):
         with st.spinner("Mengunduh data..."):
             full_data = fetch_reviews(sentiment=None if exp_sent == "semua" else exp_sent, per_page=1000)
         if full_data and full_data.get("data"):
@@ -363,6 +394,6 @@ with tab_data:
         df_exp = st.session_state["df_export"]
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
-            st.download_button(label="⬇ DOWNLOAD CSV", data=to_csv_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.csv", mime="text/csv", width="100%")
+            st.download_button(label="⬇ DOWNLOAD CSV", data=to_csv_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.csv", mime="text/csv", use_container_width=True)
         with col_dl2:
-            st.download_button(label="⬇ DOWNLOAD EXCEL", data=to_xlsx_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="100%")
+            st.download_button(label="⬇ DOWNLOAD EXCEL", data=to_xlsx_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
