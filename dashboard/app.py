@@ -17,9 +17,6 @@ from components.export import to_csv_bytes, to_xlsx_bytes
 load_dotenv()
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
     page_title="JKN Sentiment",
