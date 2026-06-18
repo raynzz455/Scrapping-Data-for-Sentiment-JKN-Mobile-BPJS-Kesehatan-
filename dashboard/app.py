@@ -122,7 +122,7 @@ def fetch_stats() -> dict | None:
             "avg_rating": round(avg_rating, 2)
         }
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error fetch_stats: {str(e)}")
         return None
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -143,7 +143,7 @@ def fetch_trend() -> list | None:
         trend_df = df.groupby(['bulan', 'sentiment']).size().unstack(fill_value=0).reset_index()
         return trend_df.to_dict(orient="records")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error fetch_stats: {str(e)}")
         return None
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -167,7 +167,7 @@ def fetch_reviews(sentiment: str | None = None, score: int | None = None,
 
         return {"data": res.data, "count": res.count}
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error fetch_stats: {str(e)}")
         return None
 
 @st.cache_data(ttl=300, show_spinner=False)
