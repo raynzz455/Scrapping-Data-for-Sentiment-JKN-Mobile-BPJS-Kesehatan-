@@ -17,7 +17,12 @@ from components.export import to_csv_bytes, to_xlsx_bytes
 
 load_dotenv()
 
-IS_HOSTED = os.getenv("STREAMLIT_SHARING") == "true"
+# ── Detect environment: cek apakah ada Supabase secrets di Streamlit Cloud ──
+try:
+    IS_HOSTED = "SUPABASE_URL" in st.secrets and "SUPABASE_KEY" in st.secrets
+except:
+    IS_HOSTED = False
+
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
 @st.cache_resource
