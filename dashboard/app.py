@@ -254,7 +254,7 @@ with tab_dash:
         stats = fetch_stats()
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Proporsi Sentimen</div>', unsafe_allow_html=True)
         if stats:
-            st.plotly_chart(donut_chart(stats["positif"], stats["netral"], stats["negatif"]), width="100%", config={"displayModeBar": False})
+            st.plotly_chart(donut_chart(stats["positif"], stats["netral"], stats["negatif"]), use_container_width=True, config={"displayModeBar": False})
         st.markdown("</div>", unsafe_allow_html=True)
 
     @st.fragment
@@ -262,7 +262,7 @@ with tab_dash:
         trend = fetch_trend()
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Tren Sentimen Bulanan</div>', unsafe_allow_html=True)
         if trend:
-            st.plotly_chart(trend_line(trend), width="100%", config={"displayModeBar": False})
+            st.plotly_chart(trend_line(trend), use_container_width=True, config={"displayModeBar": False})
         else:
             st.caption("Belum ada data tren.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -276,12 +276,12 @@ with tab_dash:
         with col_c:
             st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Distribusi Rating Bintang</div>', unsafe_allow_html=True)
             if not df_sample.empty and "score" in df_sample.columns:
-                st.plotly_chart(bar_rating(df_sample), width="100%", config={"displayModeBar": False})
+                st.plotly_chart(bar_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
         with col_d:
             st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Rata-rata Rating per Sentimen</div>', unsafe_allow_html=True)
             if not df_sample.empty:
-                st.plotly_chart(horizontal_bar_avg_rating(df_sample), width="100%", config={"displayModeBar": False})
+                st.plotly_chart(horizontal_bar_avg_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
     _stat_cards()
