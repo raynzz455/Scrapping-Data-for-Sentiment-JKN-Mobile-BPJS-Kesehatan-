@@ -26,8 +26,7 @@ def call_fastapi(endpoint: str, params: dict | None = None) -> dict | list | Non
         r = requests.get(f"{API_BASE}{endpoint}", params=params, timeout=5)
         r.raise_for_status()
         return r.json()
-    except Exception as e:
-        st.warning(f"FastAPI tidak tersedia: {e}. Menggunakan Supabase langsung.")
+    except Exception:
         return None
 
 # ── Page config ───────────────────────────────────────────
@@ -176,7 +175,7 @@ def fetch_reviews(sentiment: str | None = None, score: int | None = None,
 
         start = (page - 1) * per_page
         end = start + per_page - 1
-        res = query.order("review_date", descending=True).range(start, end).execute()
+        res = query.order("review_date", desc=True).range(start, end).execute()
 
         return {"data": res.data, "count": res.count}
     except Exception as e:
@@ -255,7 +254,7 @@ with tab_dash:
         stats = fetch_stats()
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Proporsi Sentimen</div>', unsafe_allow_html=True)
         if stats:
-            st.plotly_chart(donut_chart(stats["positif"], stats["netral"], stats["negatif"]), use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(donut_chart(stats["positif"], stats["netral"], stats["negatif"]), width="100%", config={"displayModeBar": False})
         st.markdown("</div>", unsafe_allow_html=True)
 
     @st.fragment
@@ -263,7 +262,7 @@ with tab_dash:
         trend = fetch_trend()
         st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Tren Sentimen Bulanan</div>', unsafe_allow_html=True)
         if trend:
-            st.plotly_chart(trend_line(trend), use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(trend_line(trend), width="100%", config={"displayModeBar": False})
         else:
             st.caption("Belum ada data tren.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -277,12 +276,12 @@ with tab_dash:
         with col_c:
             st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Distribusi Rating Bintang</div>', unsafe_allow_html=True)
             if not df_sample.empty and "score" in df_sample.columns:
-                st.plotly_chart(bar_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(bar_rating(df_sample), width="100%", config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
         with col_d:
             st.markdown('<div class="nb-chart-card"><div class="nb-chart-title">Rata-rata Rating per Sentimen</div>', unsafe_allow_html=True)
             if not df_sample.empty:
-                st.plotly_chart(horizontal_bar_avg_rating(df_sample), use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(horizontal_bar_avg_rating(df_sample), width="100%", config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
     _stat_cards()
@@ -307,7 +306,7 @@ with tab_dash:
     st.markdown('<div class="nb-section">Ulasan Terpilih</div>', unsafe_allow_html=True)
     with st.form("review_filter_form"):
         filter_sent = st.selectbox("Filter sentimen", options=["semua", "positif", "negatif", "netral"], label_visibility="collapsed")
-        st.form_submit_button("🔍 Tampilkan Ulasan", use_container_width=True)
+        st.form_submit_button("🔍 Tampilkan Ulasan", width="100%")
 
     active_sent = filter_sent if filter_sent != "semua" else None
     rev_data = fetch_reviews(sentiment=active_sent, per_page=10)
@@ -337,7 +336,7 @@ with tab_data:
         with col_e1: flt_sent = st.selectbox("Sentimen", ["semua", "positif", "negatif", "netral"], key="dt_sent")
         with col_e2: flt_score = st.selectbox("Rating", ["semua", "1", "2", "3", "4", "5"], key="dt_score")
         with col_e3: flt_page = st.number_input("Halaman", min_value=1, value=1, key="dt_page")
-        st.form_submit_button("🔍 Tampilkan Data", use_container_width=True)
+        st.form_submit_button("🔍 Tampilkan Data", width="100%")
 
     _s = flt_sent if flt_sent != "semua" else None
     _sc = int(flt_score) if flt_score != "semua" else None
@@ -346,14 +345,14 @@ with tab_data:
     if dt_data and dt_data.get("data"):
         df_show = pd.DataFrame(dt_data["data"])
         display_cols = [c for c in ["user_name", "content", "score", "sentiment", "review_date", "thumbs_up", "app_version"] if c in df_show.columns]
-        st.dataframe(df_show[display_cols], use_container_width=True, height=400)
+        st.dataframe(df_show[display_cols], width="100%", height=400)
     else:
         st.info("Belum ada data ulasan.")
 
     st.markdown('<div class="nb-section">Export Data</div>', unsafe_allow_html=True)
     exp_sent = st.selectbox("Filter sentimen untuk export", ["semua", "positif", "negatif", "netral"], key="exp_sent")
 
-    if st.button("📥 GENERATE FILE EXPORT", use_container_width=True):
+    if st.button("📥 GENERATE FILE EXPORT", width="100%"):
         with st.spinner("Mengunduh data..."):
             full_data = fetch_reviews(sentiment=None if exp_sent == "semua" else exp_sent, per_page=1000)
         if full_data and full_data.get("data"):
@@ -364,6 +363,6 @@ with tab_data:
         df_exp = st.session_state["df_export"]
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
-            st.download_button(label="⬇ DOWNLOAD CSV", data=to_csv_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.csv", mime="text/csv", use_container_width=True)
+            st.download_button(label="⬇ DOWNLOAD CSV", data=to_csv_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.csv", mime="text/csv", width="100%")
         with col_dl2:
-            st.download_button(label="⬇ DOWNLOAD EXCEL", data=to_xlsx_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(label="⬇ DOWNLOAD EXCEL", data=to_xlsx_bytes(df_exp), file_name=f"jkn_reviews_{exp_sent}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="100%")
