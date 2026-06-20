@@ -1,7 +1,3 @@
-"""
-Chart builders menggunakan Plotly untuk Streamlit dashboard.
-Semua chart menggunakan tema neo-brutalism: border tegas, warna bold, no shadow.
-"""
 from __future__ import annotations
 import plotly.graph_objects as go
 import plotly.express as px

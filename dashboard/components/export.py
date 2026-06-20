@@ -1,5 +1,5 @@
 """
-Export helpers: generate CSV dan XLSX bytes untuk Streamlit download button.
+Export helpers: generate CSV dan XLSX bytes
 """
 from __future__ import annotations
 import io
