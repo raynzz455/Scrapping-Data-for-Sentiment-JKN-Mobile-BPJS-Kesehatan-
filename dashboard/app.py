@@ -14,6 +14,8 @@ from supabase import create_client
 
 from components.charts import donut_chart, bar_rating, trend_line, horizontal_bar_avg_rating
 from components.export import to_csv_bytes, to_xlsx_bytes
+import base64
+import pathlib
 
 load_dotenv()
 
@@ -25,6 +27,19 @@ except:
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
+# ── Helper: Konversi gambar ke Base64 ──────────────────────
+def image_to_base64(image_path: str) -> str:
+    """Convert image file to Base64 string."""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        print(f"Error converting image: {e}")
+        return ""
+
+LOGO_PATH = pathlib.Path(__file__).parent / "assests" / "favicon.png"
+LOGO_BASE64 = image_to_base64(str(LOGO_PATH))
+
 @st.cache_resource
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -32,6 +47,7 @@ def get_supabase():
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(
     page_title="JKN Sentiment",
+    page_icon=str(LOGO_PATH),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -39,140 +55,295 @@ st.set_page_config(
 # ── CSS: Neo-Brutalism ────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
 
-:root {
-    --bg:        #0A0A0A;
-    --bg-card:   #131313;
-    --bg-input:  #000000;
-    --border:    #2A2A2A;
-    --border-hi: #FFFFFF;
-    --text:      #F5F5F5;
-    --text-dim:  #9A9A9A;
-    --text-faint:#5C5C5C;
-    --pos:       #00E5A0;
-    --neg:       #FF4D6A;
-    --neu:       #FFD600;
-    --accent:    #A78BFA;
-}
-
+/* ── Root reset ── */
 html, body, [data-testid="stAppViewContainer"] {
-    background-color: var(--bg) !important;
-    color: var(--text) !important;
-    font-family: 'Space Grotesk', sans-serif !important;
+    background-color: #0A0A0A !important;
+    color: #FFFFFF !important;
+    font-family: 'Space Grotesk', monospace !important;
 }
 
 [data-testid="stHeader"] { display: none !important; }
-[data-testid="stSidebar"] { background: var(--bg-card) !important; border-right: 1px solid var(--border); }
-[data-testid="stMainBlockContainer"] { padding: 1.5rem 2.2rem 2.5rem !important; max-width: 1400px; }
+[data-testid="stSidebar"] { background: #111111 !important; border-right: 2px solid #FFFFFF; }
+[data-testid="stMainBlockContainer"] { padding: 0 2rem 2rem !important; }
 
-/* ═══ HEADER — minimalis, tidak ramai ═══ */
+/* ── HEADER ── */
 .nb-header {
-    border-bottom: 1px solid var(--border);
-    padding: 0 0 1.1rem;
-    margin-bottom: 1.8rem;
+    border-bottom: 3px solid #FFFFFF;
+    padding: 1.2rem 0 1rem;
+    margin-bottom: 2rem;
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    justify-content: space-between;
+    gap: 1.5rem;
 }
-.nb-header-icon {
-    font-size: 1.5rem;
-    line-height: 1;
+.nb-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    flex: 1;
+}
+.nb-header-logo {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+}
+.nb-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
 }
 .nb-header-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.05rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 1.625rem;
     font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--text);
+    letter-spacing: 0.04em;
+    color: #FFFFFF;
+    text-transform: uppercase;
     margin: 0;
 }
 .nb-header-sub {
-    font-size: 0.72rem;
-    color: var(--text-faint);
-    font-family: 'Space Mono', monospace;
-    margin-top: 1px;
+    font-size: 0.8rem;
+    color: #888888;
+    font-family: 'Space Grotesk', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0;
 }
-.nb-header-badges { margin-left: auto; display: flex; gap: 0.5rem; }
-.nb-badge-pill {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.62rem;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.03em;
+.nb-header-badges {
+    display: flex;
+    gap: 0.6rem;
+    flex-shrink: 0;
+    align-items: center;
 }
-.pill-env-local  { background: rgba(255,214,0,0.1); color: var(--neu); border: 1px solid rgba(255,214,0,0.3); }
-.pill-env-cloud  { background: rgba(0,229,160,0.1); color: var(--pos); border: 1px solid rgba(0,229,160,0.3); }
-.pill-model      { background: rgba(167,139,250,0.1); color: var(--accent); border: 1px solid rgba(167,139,250,0.3); }
-
-/* ═══ STAT CARDS — kontras tinggi, angka jadi fokus utama ═══ */
-.nb-stat {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.1rem 1.3rem;
-    position: relative;
-    transition: border-color 0.15s ease;
-}
-.nb-stat:hover { border-color: #444444; }
-.nb-stat-label {
-    font-size: 0.68rem;
+.nb-header-badge {
+    background: #00E5A0;
+    color: #000000;
     font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border: 2px solid #000000;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--text-dim);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    white-space: nowrap;
 }
-.nb-stat-value {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 2.1rem;
-    font-weight: 700;
-    line-height: 1.1;
-    color: var(--text);
-    letter-spacing: -0.02em;
-}
-.nb-stat-sub {
-    font-size: 0.72rem;
-    color: var(--text-faint);
-    margin-top: 0.35rem;
-    font-family: 'Space Mono', monospace;
-}
-.nb-stat-accent-pos { border-left: 3px solid var(--pos); }
-.nb-stat-accent-neg { border-left: 3px solid var(--neg); }
-.nb-stat-accent-neu { border-left: 3px solid var(--neu); }
-.nb-stat-accent-tot { border-left: 3px solid #FFFFFF; }
-.nb-stat-accent-rat { border-left: 3px solid var(--accent); }
-.nb-stat-accent-pos .nb-stat-value { color: var(--pos); }
-.nb-stat-accent-neg .nb-stat-value { color: var(--neg); }
-.nb-stat-accent-neu .nb-stat-value { color: var(--neu); }
-.nb-stat-accent-rat .nb-stat-value { color: var(--accent); }
 
-/* ═══ SECTION LABEL ═══ */
-.nb-section {
+/* ── STAT CARDS ── */
+.nb-stat {
+    background: #111111;
+    border: 2px solid #FFFFFF;
+    padding: 1.2rem 1.4rem;
+    position: relative;
+    box-shadow: 4px 4px 0 #FFFFFF;
+    transition: box-shadow 0.12s ease, transform 0.12s ease;
+}
+.nb-stat:hover {
+    box-shadow: 6px 6px 0 #FFFFFF;
+    transform: translate(-2px, -2px);
+}
+.nb-stat-label {
+    font-size: 0.75rem;
     font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--text-dim);
-    margin: 2.2rem 0 0.9rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
+    color: #888888;
+    margin-bottom: 0.5rem;
+}
+.nb-stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #FFFFFF;
+}
+.nb-stat-sub {
+    font-size: 0.8rem;
+    color: #999999;
+    margin-top: 0.4rem;
+    font-family: 'Space Grotesk', sans-serif;
+}
+.nb-stat-accent-pos { border-left: 5px solid #00E5A0; }
+.nb-stat-accent-neg { border-left: 5px solid #FF3B5C; }
+.nb-stat-accent-neu { border-left: 5px solid #FFD600; }
+.nb-stat-accent-tot { border-left: 5px solid #FFFFFF; }
+.nb-stat-accent-rat { border-left: 5px solid #A78BFA; }
+
+/* ── SECTION LABEL ── */
+.nb-section {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #666666;
+    border-top: 1px solid #222222;
+    padding-top: 0.7rem;
+    margin: 1.8rem 0 1rem;
 }
 
-/* ═══ CHART CARD ═══ */
+/* ── CHART CARD ── */
 .nb-chart-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.1rem 1.2rem 0.7rem;
-    margin-bottom: 0.6rem;
+    background: #111111;
+    border: 2px solid #FFFFFF;
+    padding: 1.2rem 1.2rem 0.8rem;
+    box-shadow: 4px 4px 0 #333333;
+    margin-bottom: 0.5rem;
+    min-height: 450px;
+    display: flex;
+    flex-direction: column;
+}
+.nb-chart-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #CCCCCC;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #222222;
+    padding-bottom: 0.6rem;
+    font-weight: 600;
 }
 
+/* ── REVIEW TABLE ── */
+.nb-review-card {
+    background: #111111;
+    border: 2px solid #222222;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.6rem;
+    transition: border-color 0.1s;
+}
+.nb-review-card:hover { border-color: #FFFFFF; }
+.nb-review-card.pos { border-left: 4px solid #00E5A0; }
+.nb-review-card.neg { border-left: 4px solid #FF3B5C; }
+.nb-review-card.neu { border-left: 4px solid #FFD600; }
+.nb-review-user {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: #888888;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+}
+.nb-review-text { font-size: 0.95rem; color: #EEEEEE; line-height: 1.6; margin: 0.5rem 0; }
+.nb-review-meta { font-size: 0.8rem; color: #777777; margin-top: 0.5rem; font-family: 'Space Mono', monospace; }
+.nb-sentiment-badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border: 1.5px solid;
+}
+.nb-badge-pos { color: #00E5A0; border-color: #00E5A0; background: rgba(0,229,160,0.08); }
+.nb-badge-neg { color: #FF3B5C; border-color: #FF3B5C; background: rgba(255,59,92,0.08); }
+.nb-badge-neu { color: #FFD600; border-color: #FFD600; background: rgba(255,214,0,0.08); }
+
+/* ── KEYWORD TAGS ── */
+.nb-tag-wrap { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1rem; min-height: 200px; }
+.nb-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    padding: 6px 14px;
+    border: 1.5px solid;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: default;
+    font-weight: 500;
+}
+.nb-tag-pos { color: #00E5A0; border-color: #00E5A0; background: rgba(0,229,160,0.06); }
+.nb-tag-neg { color: #FF3B5C; border-color: #FF3B5C; background: rgba(255,59,92,0.06); }
+
+/* ── SCRAPER FORM ── */
+div[data-testid="stNumberInput"] label,
+div[data-testid="stTextInput"] label,
+div[data-testid="stCheckbox"] label {
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    color: #AAAAAA !important;
+}
+
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input {
+    background: #000000 !important;
+    border: 2px solid #FFFFFF !important;
+    color: #FFFFFF !important;
+    border-radius: 0 !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.9rem !important;
+}
+
+div[data-testid="stButton"] button {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    border: 2px solid #FFFFFF !important;
+    border-radius: 0 !important;
+    font-family: 'Space Mono', monospace !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    font-size: 0.75rem !important;
+    box-shadow: 4px 4px 0 #444444 !important;
+    transition: all 0.1s !important;
+    width: 100%;
+}
+div[data-testid="stButton"] button:hover {
+    box-shadow: 2px 2px 0 #444444 !important;
+    transform: translate(2px, 2px) !important;
+}
+
+/* Select / tabs */
+div[data-testid="stSelectbox"] > div > div {
+    background: #000000 !important;
+    border: 2px solid #FFFFFF !important;
+    border-radius: 0 !important;
+    color: #FFFFFF !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.8rem !important;
+}
+
+/* Plotly chart bg */
+.js-plotly-plot .plotly { background: transparent !important; }
+.stPlotlyChart { border: 2px solid #222222 !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111111; }
+::-webkit-scrollbar-thumb { background: #333333; }
+::-webkit-scrollbar-thumb:hover { background: #555555; }
+
+/* Metric override */
+[data-testid="metric-container"] {
+    background: #111111 !important;
+    border: 2px solid #FFFFFF !important;
+    padding: 1rem !important;
+    box-shadow: 4px 4px 0 #FFFFFF !important;
+}
+
+/* Download button */
+div[data-testid="stDownloadButton"] button {
+    background: #000000 !important;
+    color: #00E5A0 !important;
+    border: 2px solid #00E5A0 !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    border-radius: 0 !important;
+    box-shadow: 3px 3px 0 #00E5A0 !important;
+    width: 100%;
+}
+
+div[data-testid="stAlert"] {
+    border-radius: 0 !important;
+    border: 2px solid !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.8rem !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 
@@ -287,11 +458,14 @@ def star_str(score: int | None) -> str:
 env_badge = "☁️ STREAMLIT CLOUD" if IS_HOSTED else "💻 LOCAL"
 st.markdown(f"""
 <div class="nb-header">
-    <div>
-        <div class="nb-header-title">🏥 JKN Sentiment</div>
-        <div class="nb-header-sub">Mobile JKN — BPJS Kesehatan · Analisis Ulasan Google Play</div>
+    <div class="nb-header-left">
+        <img src="data:image/png;base64,{LOGO_BASE64}" alt="Logo" class="nb-header-logo" />
+        <div class="nb-header-text">
+            <div class="nb-header-title">JKN Sentiment</div>
+            <div class="nb-header-sub">Mobile JKN — BPJS Kesehatan · Analisis Ulasan Google Play</div>
+        </div>
     </div>
-    <div style="display: flex; gap: 0.5rem;">
+    <div class="nb-header-badges">
         <div class="nb-header-badge">{env_badge}</div>
         <div class="nb-header-badge">IndoBERT</div>
     </div>

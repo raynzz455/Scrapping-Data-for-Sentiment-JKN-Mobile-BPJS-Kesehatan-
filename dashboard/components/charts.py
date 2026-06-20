@@ -15,7 +15,7 @@ C_TEXT  = "#FFFFFF"
 LAYOUT_BASE = dict(
     paper_bgcolor=C_CARD,
     plot_bgcolor=C_CARD,
-    font=dict(family="Space Grotesk, monospace", color=C_TEXT, size=12),
+    font=dict(family="Space Grotesk, monospace", color=C_TEXT, size=14),
     margin=dict(l=20, r=20, t=40, b=20),
 )
 
@@ -37,7 +37,7 @@ def donut_chart(positif: int, netral: int, negatif: int) -> go.Figure:
     fig.update_layout(
         **LAYOUT_BASE,
         showlegend=False,
-        height=280,
+        height=320,
         annotations=[dict(
             text=f"<b>{positif+netral+negatif}</b><br><span style='font-size:10px'>total</span>",
             x=0.5, y=0.5,
@@ -66,16 +66,16 @@ def bar_rating(df: pd.DataFrame) -> go.Figure:
     ))
     fig.update_layout(
         **LAYOUT_BASE,
-        height=260,
+        height=300,
         xaxis=dict(
             showgrid=False,
-            tickfont=dict(color=C_TEXT, size=12),
+            tickfont=dict(color=C_TEXT, size=14),
             linecolor=C_BORDER,
         ),
         yaxis=dict(
             showgrid=True,
             gridcolor="#222222",
-            tickfont=dict(color=C_TEXT),
+            tickfont=dict(color=C_TEXT, size=14),
             linecolor=C_BORDER,
         ),
         bargap=0.25,
@@ -111,11 +111,11 @@ def trend_line(monthly_data: list[dict]) -> go.Figure:
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=300,
+        height=320,
         legend=dict(
             orientation="h",
             y=1.1,
-            font=dict(size=12, color=C_TEXT),
+            font=dict(size=14, color=C_TEXT),
             bgcolor="rgba(0,0,0,0)",
         ),
         xaxis=dict(
@@ -163,8 +163,8 @@ def horizontal_bar_avg_rating(df: pd.DataFrame) -> go.Figure:
     ))
     fig.update_layout(
         **LAYOUT_BASE,
-        height=220,
-        xaxis=dict(range=[0, 5.5], showgrid=True, gridcolor="#222222", tickfont=dict(color=C_TEXT), linecolor=C_BORDER),
-        yaxis=dict(showgrid=False, tickfont=dict(color=C_TEXT, size=13), linecolor=C_BORDER),
+        height=280,
+        xaxis=dict(range=[0, 5.5], showgrid=True, gridcolor="#222222", tickfont=dict(color=C_TEXT, size=14), linecolor=C_BORDER),
+        yaxis=dict(showgrid=False, tickfont=dict(color=C_TEXT, size=14), linecolor=C_BORDER),
     )
     return fig
